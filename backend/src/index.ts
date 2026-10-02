@@ -63,15 +63,21 @@ app.post("/api/upload", auth, upload.single("photo"), wrap(async (req, res) => {
 }));
 
 // Generation pipeline: Gemini scheme -> HTML -> Puppeteer PNG
-async function generate(id: string) {
-  const p: any = await Poster.findById(id); const t: any = await Template.findById(p.templateId); const t0 = Date.now();
+async function generate(id: string,instructions = "") {
+  const p: any = await Poster.findById(id); 
+  const t: any = await Template.findById(p.templateId); 
+  const t0 = Date.now();
   let prompt = ""; let ok = false;
   try {
     p.status = "generating"; p.error = undefined; 
     await p.save();
     const cfg = t.layoutConfig || {};
-    const { scheme, prompt: pr } = await suggestScheme(p.formData.occasion || t.occasionType, p.formData.party || "", cfg.palette);
-    prompt = pr;
+   
+    const { scheme, prompt: pr, ai } = await suggestScheme(
+  p.formData.occasion || t.occasionType, p.formData.party || "", cfg.palette,
+  { instructions, attempt: p.retries, previous: p.scheme });
+prompt = pr; p.scheme = scheme;
+if (instructions && !ai) p.error = "AI couldn't apply your instructions this time. Please try again.";
 
    const file = `posters/${id}-${p.retries}.png`;
 const localPath = path.join(OUT, file);
@@ -104,18 +110,38 @@ app.post("/api/posters", auth, genLimit, wrap(async (req, res) => {
   const p = await Poster.create({ userId: req.user!.id, templateId, formData, uploadedPhotoUrls: photos.slice(0, 3),status: "generating" });
   generate(p.id); res.status(202).json(p);
 }));
+
 app.get("/api/posters/user/:userId", auth, wrap(async (req, res) => {
   if (req.params.userId !== req.user!.id && req.user!.role !== "admin") return res.status(403).json({ error: "Forbidden" });
   res.json(await Poster.find({ userId: req.params.userId }).sort({ createdAt: -1 }));
 }));
+
 const own = async (req: Req) => { const p: any = await Poster.findById(req.params.id); return p && (String(p.userId) === req.user!.id || req.user!.role === "admin") ? p : null; };
-app.get("/api/posters/:id", auth, wrap(async (req, res) => { const p = await own(req); p ? res.json(p) : res.status(404).json({ error: "Not found" }); }));
+const hide = (p: any) => {
+  const o = p.toObject ? p.toObject() : p;
+  if (o.blocked) { o.generatedImageUrl = undefined; o.error = "This poster was blocked by an admin."; }
+  return o;
+};
+app.get("/api/posters/:id", auth, wrap(async (req, res) => { const p = await own(req); p ? res.json(hide(p)) : res.status(404).json({ error: "Not found" }); }));
+
 app.post("/api/posters/:id/regenerate", auth, genLimit, wrap(async (req, res) => {
-  const p = await own(req); if (!p) return res.status(404).json({ error: "Not found" });
+  const p = await own(req);
+  
+   if (!p) 
+    return res.status(404).json({ error: "Not found" });
+  if (p.blocked)
+     return res.status(403)
+    .json({ 
+      error: "This poster was blocked by an admin" 
+    });
   if (p.retries >= Number(process.env.MAX_RETRIES || 3)) return res.status(429).json({ error: "Regeneration limit reached" });
+  const instructions = String(req.body.instructions || "").slice(0, 300);
+  if (BLOCKED.some(b => instructions.includes(b))) return res.status(422).json({ error: "Content not allowed" });
   if (req.body.formData) p.formData = { ...p.formData, ...req.body.formData };
-  p.retries += 1; p.status = "generating"; await p.save(); generate(p.id); res.status(202).json(p);
+  p.retries += 1; p.status = "generating"; await p.save();
+  generate(p.id, instructions); res.status(202).json(p);
 }));
+
 app.delete("/api/posters/:id", auth, wrap(async (req, res) => {
   const p = await own(req); if (!p) return res.status(404).json({ error: "Not found" }); await p.deleteOne(); res.json({ ok: true });
 }));
@@ -124,7 +150,20 @@ app.delete("/api/posters/:id", auth, wrap(async (req, res) => {
 app.post("/api/admin/templates", auth, admin, wrap(async (req, res) => res.json(await Template.create(req.body))));
 app.patch("/api/admin/templates/:id", auth, admin, wrap(async (req, res) => res.json(await Template.findByIdAndUpdate(req.params.id, req.body, { new: true }))));
 app.delete("/api/admin/templates/:id", auth, admin, wrap(async (req, res) => res.json(await Template.findByIdAndDelete(req.params.id))));
-app.get("/api/admin/posters", auth, admin, wrap(async (_r, res) => res.json(await Poster.find().sort({ createdAt: -1 }).limit(100))));
+
+app.get("/api/admin/templates", auth, admin, wrap(async (_r, res) => res.json(await Template.find())));
+app.get("/api/admin/posters", auth, admin, wrap(async (_r, res) =>
+  res.json(await Poster.find().sort({ createdAt: -1 }).limit(100).populate("userId", "name email"))));
+app.patch("/api/admin/posters/:id/block", auth, admin, wrap(async (req, res) =>
+  res.json(await Poster.findByIdAndUpdate(req.params.id, { blocked: !!req.body.blocked }, { new: true }))));
+app.get("/api/admin/stats", auth, admin, wrap(async (_r, res) => {
+  const [users, posters, completed, failed, blocked, lat] = await Promise.all([
+    User.countDocuments(), Poster.countDocuments(), Poster.countDocuments({ status: "completed" }),
+    Poster.countDocuments({ status: "failed" }), Poster.countDocuments({ blocked: true }),
+    GenerationLog.aggregate([{ $group: { _id: null, avg: { $avg: "$latencyMs" } } }]),
+  ]);
+  res.json({ users, posters, completed, failed, blocked, avgLatencyMs: Math.round(lat[0]?.avg || 0) });
+}));
 
 app.use((e: Error, _q: Request, res: Response, _n: NextFunction) => { console.error(e); res.status(500).json({ error: e.message }); });
 mongoose.connect(process.env.MONGO_URI!).then(() => app.listen(process.env.PORT || 4000, () => console.log("API on", PUBLIC)));

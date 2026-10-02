@@ -1,4 +1,5 @@
 import { Schema, model, Types } from "mongoose";
+
 export const User = model("User", new Schema({
   name: String, 
   email: { type: String, unique: true, required: true },
@@ -17,6 +18,7 @@ export const Template = model("Template",
   layoutConfig: Schema.Types.Mixed, 
   isActive: { type: Boolean, default: true },
 }));
+
 export const Poster = model("Poster", 
   new Schema({
   userId: { type: Types.ObjectId, 
@@ -24,8 +26,10 @@ export const Poster = model("Poster",
   templateId: { type: Types.ObjectId, ref: "Template" },
   formData: Schema.Types.Mixed, uploadedPhotoUrls: [String], generatedImageUrl: String,
   status: { type: String, enum: ["draft", "generating", "completed", "failed"], default: "draft" },
-  retries: { type: Number, default: 0 }, error: String,
+  retries: { type: Number, default: 0 }, error: String, scheme: Schema.Types.Mixed,
+ blocked: { type: Boolean, default: false },
 }, { timestamps: true }));
+
 export const GenerationLog = model("GenerationLog", new Schema({
   posterId: Types.ObjectId, geminiPromptUsed: String, latencyMs: Number, success: Boolean,
 }, { timestamps: true }));

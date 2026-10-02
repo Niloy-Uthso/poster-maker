@@ -16,7 +16,7 @@ background:linear-gradient(160deg,${esc(s.bg1)},${esc(s.bg2)});position:relative
 .deco{position:absolute;font-size:150px;opacity:.18}.photos{position:absolute;top:90px;left:80px;right:80px;display:flex;gap:30px;justify-content:center;
 align-items:flex-end;height:620px}.ph{flex:1;max-width:340px;height:100%;border:6px solid ${esc(s.accent)};border-radius:200px 200px 16px 16px;overflow:hidden;background:#0003}
 .ph img{width:100%;height:100%;object-fit:cover;object-position:center ${s.photoFocus === "top" ? "15%" : "40%"}}
-h1{position:absolute;top:760px;width:100%;text-align:center;font-family:'Noto Serif Bengali',serif;font-weight:900;font-size:${(f.headline || "").length > 18 ? 110 : 140}px;
+h1{position:absolute;top:760px;width:100%;text-align:center;font-family:'Noto Serif Bengali',serif;font-weight:900;font-size:${Math.round(((f.headline || "").length > 18 ? 110 : 140) * (s.headlineScale || 1))}px;
 line-height:1.2;padding:0 70px;text-shadow:0 4px 0 #0004}.sub{position:absolute;top:1130px;width:100%;text-align:center;font-size:48px;font-weight:700;color:${esc(s.accent)}}
 .foot{position:absolute;bottom:60px;left:60px;right:60px;background:#0007;border-radius:16px;padding:26px 40px;text-align:center;color:#fff}
 .foot b{font-size:50px;display:block}.foot span{font-size:34px}.credit{font-size:30px;margin-top:8px;color:${esc(s.accent)}}</style></head><body>

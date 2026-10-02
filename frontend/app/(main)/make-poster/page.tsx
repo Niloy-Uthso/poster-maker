@@ -19,7 +19,7 @@ export default function MakePosterPage() {
   const [hist, setHist] = useState<any[]>([]);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-
+const [instructions, setInstructions] = useState("");
   // route guard
   useEffect(() => { if (!loading && !token) router.replace("/login"); }, [loading, token, router]);
 
@@ -83,7 +83,7 @@ export default function MakePosterPage() {
     formData: { ...f, occasion: tpls.find(t => t._id === tpl)?.occasionType },
     photos,
   });
-  const regen = () => run(`/api/posters/${poster._id}/regenerate`, { formData: f });
+  const regen = () => run(`/api/posters/${poster._id}/regenerate`, { formData: f, instructions });
 
   const del = async (id: string) => {
     try { await call(`/api/posters/${id}`, { method: "DELETE" }); if (poster?._id === id) setPoster(null); loadHist(); }
@@ -143,7 +143,8 @@ export default function MakePosterPage() {
             <div key={p._id} className="mb-2 flex items-center gap-2">
               <span className="flex-1 truncate">{p.formData?.headline} — {p.status}</span>
               {p.generatedImageUrl && <a href={p.generatedImageUrl} target="_blank" className="text-brand underline">Download</a>}
-              <button onClick={() => setPoster(p)} className="cursor-pointer rounded border px-2 py-0.5 hover:bg-gray-100">View</button>
+              {/* <button onClick={() => setPoster(p)} className="cursor-pointer rounded border px-2 py-0.5 hover:bg-gray-100">View</button> */}
+              <button onClick={() => { setPoster(p); setF((old: any) => ({ ...old, ...p.formData })); }} className="cursor-pointer rounded border px-2 py-0.5 hover:bg-gray-100" >View</button>
               <button onClick={() => del(p._id)} className="cursor-pointer rounded border px-2 py-0.5 hover:bg-gray-100">✕</button>
             </div>
           ))}
@@ -158,6 +159,15 @@ export default function MakePosterPage() {
         {poster?.status === "completed" && poster.generatedImageUrl && (
           <>
             <img src={poster.generatedImageUrl} alt="Generated poster" className="w-full rounded-lg" />
+            {poster.error && <p className="mt-2 text-sm text-amber-600">{poster.error}</p>}
+<textarea
+  value={instructions}
+  onChange={e => setInstructions(e.target.value)}
+  maxLength={300}
+  rows={3}
+  placeholder="What should change? e.g. make the background blue, use doves, bigger headline"
+  className="mt-3 w-full rounded-lg border border-gray-300 p-2.5 outline-none focus:border-brand"
+/>
             <div className="mt-3 flex flex-wrap gap-2">
               <a href={poster.generatedImageUrl} target="_blank"
                 className="rounded-lg bg-brand px-4 py-2.5 text-white hover:bg-brand-dark">Open / Download PNG (2400×3200)</a>
