@@ -1,0 +1,130 @@
+import "dotenv/config";
+import express, { Request, Response, NextFunction } from "express";
+import cors from "cors"; import mongoose from "mongoose"; import multer from "multer";
+import bcrypt from "bcryptjs"; import jwt from "jsonwebtoken"; import rateLimit from "express-rate-limit";
+import path from "path"; import fs from "fs";
+import { User, Template, Poster, GenerationLog } from "./models";
+import { suggestScheme } from "./gemini"; import { posterHtml, renderPng } from "./render";
+
+const app = express(); 
+const SECRET = process.env.JWT_SECRET || "dev";
+const PUBLIC = process.env.PUBLIC_URL || "http://localhost:4000";
+const OUT = path.join(__dirname, "..", "storage"); 
+fs.mkdirSync(path.join(OUT, "uploads"), { recursive: true });
+app.use(cors({ origin: process.env.FRONTEND_URL || "*" })); 
+app.use(express.json());
+app.use("/files", express.static(OUT));
+
+type Req = Request & { user?: { id: string; role: string } };
+const auth = (req: Req, res: Response, next: NextFunction) => {
+  try { req.user = jwt.verify((req.headers.authorization || "").replace("Bearer ", ""), SECRET) as any; next(); }
+  catch { res.status(401).json({ error: "Unauthorized" }); }
+};
+const admin = (req: Req, res: Response, next: NextFunction) => req.user?.role === "admin" ? next() : res.status(403).json({ error: "Forbidden" });
+const wrap = (fn: (req: Req, res: Response) => any) => (req: Req, res: Response, next: NextFunction) => Promise.resolve(fn(req, res)).catch(next);
+const token = (u: any) => jwt.sign({ id: u.id, role: u.role }, SECRET, { expiresIn: "7d" });
+
+// Auth
+app.post("/api/auth/register", wrap(async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!email || !password || password.length < 6) return res.status(400).json({ error: "Email and 6+ char password required" });
+  if (await User.findOne({ email })) return res.status(409).json({ error: "Email already registered" });
+  const u = await User.create({ name, email, passwordHash: await bcrypt.hash(password, 10) });
+  res.json({ token: token(u), user: { id: u.id, name, email } });
+}));
+app.post("/api/auth/login", wrap(async (req, res) => {
+  const u = await User.findOne({ email: req.body.email });
+  if (!u || !(await bcrypt.compare(req.body.password || "", u.passwordHash || ""))) return res.status(401).json({ error: "Invalid credentials" });
+  res.json({ token: token(u), user: { id: u.id, name: u.name, email: u.email, role: u.role } });
+}));
+
+// Templates
+app.get("/api/templates", wrap(async (req, res) => {
+  const q: any = { isActive: true }; if (req.query.occasion) q.occasionType = req.query.occasion;
+  res.json(await Template.find(q));
+}));
+app.get("/api/templates/:id", wrap(async (req, res) => res.json(await Template.findById(req.params.id))));
+
+// Upload (Cloudinary if configured, else local disk)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_r, f, cb) => cb(null, /^image\/(png|jpe?g|webp)$/.test(f.mimetype)) });
+app.post("/api/upload", auth, upload.single("photo"), wrap(async (req, res) => {
+  const file = (req as any).file; if (!file) return res.status(400).json({ error: "Image (png/jpg/webp, <8MB) required" });
+  if (process.env.CLOUDINARY_URL) {
+
+    const { v2: cloud } = await import("cloudinary");
+    const url = await new Promise<string>((ok, no) => cloud.uploader.upload_stream({ folder: "posters" }, (e, r) => e ? no(e) : ok(r!.secure_url)).end(file.buffer));
+    return res.json({ url });
+    
+  }
+  const name = `${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname) || ".jpg"}`;
+  fs.writeFileSync(path.join(OUT, "uploads", name), file.buffer);
+  res.json({ url: `${PUBLIC}/files/uploads/${name}` });
+}));
+
+// Generation pipeline: Gemini scheme -> HTML -> Puppeteer PNG
+async function generate(id: string) {
+  const p: any = await Poster.findById(id); const t: any = await Template.findById(p.templateId); const t0 = Date.now();
+  let prompt = ""; let ok = false;
+  try {
+    p.status = "generating"; p.error = undefined; 
+    await p.save();
+    const cfg = t.layoutConfig || {};
+    const { scheme, prompt: pr } = await suggestScheme(p.formData.occasion || t.occasionType, p.formData.party || "", cfg.palette);
+    prompt = pr;
+
+   const file = `posters/${id}-${p.retries}.png`;
+const localPath = path.join(OUT, file);
+await renderPng(posterHtml(p.formData, p.uploadedPhotoUrls, scheme, cfg.photoSlots), localPath);
+
+if (process.env.CLOUDINARY_URL) {
+  const { v2: cloud } = await import("cloudinary");
+  const r = await cloud.uploader.upload(localPath, {
+    folder: "posters/generated",
+    public_id: `${id}-${p.retries}`,
+    resource_type: "image",
+  });
+  p.generatedImageUrl = r.secure_url;
+  fs.unlink(localPath, () => {}); // local copy no longer needed
+} else {
+  p.generatedImageUrl = `${PUBLIC}/files/${file}`;
+}
+p.status = "completed"; ok = true;
+
+  } catch (e: any) { p.status = "failed"; p.error = e.message; }
+  await p.save(); await GenerationLog.create({ posterId: p._id, geminiPromptUsed: prompt, latencyMs: Date.now() - t0, success: ok });
+}
+const genLimit = rateLimit({ windowMs: 60_000, max: 6, message: { error: "Too many generations, slow down" } });
+const BLOCKED = (process.env.BLOCKED_TERMS || "").split(",").filter(Boolean); // basic moderation hook
+
+app.post("/api/posters", auth, genLimit, wrap(async (req, res) => {
+  const { templateId, formData = {}, photos = [] } = req.body;
+  if (!formData.name || !formData.headline) return res.status(400).json({ error: "name and headline required" });
+  if (BLOCKED.some(b => JSON.stringify(formData).includes(b))) return res.status(422).json({ error: "Content not allowed" });
+  const p = await Poster.create({ userId: req.user!.id, templateId, formData, uploadedPhotoUrls: photos.slice(0, 3),status: "generating" });
+  generate(p.id); res.status(202).json(p);
+}));
+app.get("/api/posters/user/:userId", auth, wrap(async (req, res) => {
+  if (req.params.userId !== req.user!.id && req.user!.role !== "admin") return res.status(403).json({ error: "Forbidden" });
+  res.json(await Poster.find({ userId: req.params.userId }).sort({ createdAt: -1 }));
+}));
+const own = async (req: Req) => { const p: any = await Poster.findById(req.params.id); return p && (String(p.userId) === req.user!.id || req.user!.role === "admin") ? p : null; };
+app.get("/api/posters/:id", auth, wrap(async (req, res) => { const p = await own(req); p ? res.json(p) : res.status(404).json({ error: "Not found" }); }));
+app.post("/api/posters/:id/regenerate", auth, genLimit, wrap(async (req, res) => {
+  const p = await own(req); if (!p) return res.status(404).json({ error: "Not found" });
+  if (p.retries >= Number(process.env.MAX_RETRIES || 3)) return res.status(429).json({ error: "Regeneration limit reached" });
+  if (req.body.formData) p.formData = { ...p.formData, ...req.body.formData };
+  p.retries += 1; p.status = "generating"; await p.save(); generate(p.id); res.status(202).json(p);
+}));
+app.delete("/api/posters/:id", auth, wrap(async (req, res) => {
+  const p = await own(req); if (!p) return res.status(404).json({ error: "Not found" }); await p.deleteOne(); res.json({ ok: true });
+}));
+
+// Admin (API only)
+app.post("/api/admin/templates", auth, admin, wrap(async (req, res) => res.json(await Template.create(req.body))));
+app.patch("/api/admin/templates/:id", auth, admin, wrap(async (req, res) => res.json(await Template.findByIdAndUpdate(req.params.id, req.body, { new: true }))));
+app.delete("/api/admin/templates/:id", auth, admin, wrap(async (req, res) => res.json(await Template.findByIdAndDelete(req.params.id))));
+app.get("/api/admin/posters", auth, admin, wrap(async (_r, res) => res.json(await Poster.find().sort({ createdAt: -1 }).limit(100))));
+
+app.use((e: Error, _q: Request, res: Response, _n: NextFunction) => { console.error(e); res.status(500).json({ error: e.message }); });
+mongoose.connect(process.env.MONGO_URI!).then(() => app.listen(process.env.PORT || 4000, () => console.log("API on", PUBLIC)));
