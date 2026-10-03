@@ -169,7 +169,7 @@ const [instructions, setInstructions] = useState("");
   onChange={e => setInstructions(e.target.value)}
   maxLength={300}
   rows={3}
-  placeholder="What should change? e.g. make the background blue, use doves, bigger headline"
+  placeholder="e.g. make the background red, use paddy decoration, bigger headline | যেমন: ব্যাকগ্রাউন্ড লাল করো, কবুতর দাও"
   className="mt-3 w-full rounded-lg border border-gray-300 p-2.5 outline-none focus:border-brand"
 />
             <div className="mt-3 flex flex-wrap gap-2">

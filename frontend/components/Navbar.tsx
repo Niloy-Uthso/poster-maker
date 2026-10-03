@@ -29,6 +29,8 @@ export default function Navbar() {
         </span>
       </Link>
       <div className="flex items-center gap-5">
+                    <Link href="/" className="font-medium text-white hover:underline">Home</Link>
+
         {!loading && (token ? (
           <>
             <Link href="/make-poster" className="font-medium text-white hover:underline">Make Poster</Link>
