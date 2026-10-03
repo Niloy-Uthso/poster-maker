@@ -17,11 +17,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // read saved login once when the app starts
   useEffect(() => {
   try {
     const t = localStorage.getItem("t");
     const u = localStorage.getItem("u");
+
     if (t && u) {
       const parsed = JSON.parse(u);
       if (!parsed || typeof parsed !== "object" || !parsed.id) throw new Error("old format");
@@ -37,13 +37,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (t: string, u: User) => {
     localStorage.setItem("t", t);
     localStorage.setItem("u", JSON.stringify(u));
-    setToken(t); setUser(u);
+    setToken(t); 
+    setUser(u);
   };
 
   const logout = () => {
     localStorage.removeItem("t");
     localStorage.removeItem("u");
-    setToken(""); setUser(null);
+    setToken(""); 
+    setUser(null);
   };
 
   return <AuthContext.Provider value={{ token, user, loading, login, logout }}>{children}</AuthContext.Provider>;
@@ -51,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
+  if (!ctx) 
+    throw new Error("useAuth must be used inside <AuthProvider>");
   return ctx;
 }

@@ -10,11 +10,9 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 flex items-center justify-between bg-brand px-6 py-3.5 shadow-md">
-        {/* logo here */}
       {/* <Link href="/" className="text-xl font-bold text-white">পোস্টার মেকার</Link> */}
 
 
-      {/* Logo + Brand Name */}
       <Link href="/" className="flex items-center gap-2">
         <Image
           src="/1.png"

@@ -20,8 +20,12 @@ export default function MakePosterPage() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 const [instructions, setInstructions] = useState("");
-  // route guard
-  useEffect(() => { if (!loading && !token) router.replace("/login"); }, [loading, token, router]);
+
+useEffect(() => { 
+  if (!loading && !token) 
+    router.replace("/login"); }, 
+
+  [loading, token, router]);
 
   const call = useCallback(async (path: string, opts: any = {}) => {
     const r = await fetch(API + path, {
@@ -32,25 +36,31 @@ const [instructions, setInstructions] = useState("");
       },
     });
     const j = await r.json();
-    if (!r.ok) throw new Error(j.error || "Request failed");
+    if (!r.ok) 
+      throw new Error(j.error || "Request failed");
     return j;
   }, [token]);
 
   const loadHist = useCallback(async () => {
-    if (!user) return;
-    try { setHist(await call(`/api/posters/user/${user.id}`)); } catch {}
+    if (!user)
+       return;
+    try { 
+      setHist(await call(`/api/posters/user/${user.id}`));
+     } catch {}
   }, [call, user]);
 
-  // templates + history
+
   useEffect(() => {
     if (!token) return;
     fetch(`${API}/api/templates`).then(r => r.json()).then(d => { setTpls(d); setTpl(d[0]?._id || ""); });
     loadHist();
   }, [token, loadHist]);
 
-  // poll while generating
+
   useEffect(() => {
-   if (!poster || !["draft", "generating"].includes(poster.status)) return;
+   if (!poster || !["draft", "generating"].includes(poster.status))
+     return;
+    
     const id = setInterval(async () => {
       try {
         const p = await call(`/api/posters/${poster._id}`);
