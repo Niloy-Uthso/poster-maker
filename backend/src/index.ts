@@ -114,7 +114,7 @@ async function generate(id: string, instructions = "") {
       p.generatedImageUrl = `${PUBLIC}/files/${file}`;
     }
     p.status = "completed"; ok = true;
-  } catch (e: any) { p.status = "failed"; p.error = e.message; }
+  } catch (e: any) { console.error("generate failed:", e); p.status = "failed"; p.error = e.message; }
   await p.save();
   await GenerationLog.create({ posterId: p._id, geminiPromptUsed: prompt, latencyMs: Date.now() - t0, success: ok });
 }
