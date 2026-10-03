@@ -1,3 +1,4 @@
+import { pathToFileURL } from "url";
 import fs from "fs"; import path from "path";
 import { Scheme } from "./gemini";
 
@@ -43,9 +44,19 @@ line-height:1.2;padding:0 70px;text-shadow:0 4px 0 #0004}
 }
 
 // On Vercel: slim serverless Chromium. On your PC: normal puppeteer.
+// TypeScript compiles import() to require() in CommonJS, which fails for ESM-only packages.
+// Building the import() inside a Function keeps it a real dynamic import.
+const esmImport = new Function("m", "return import(m)") as (m: string) => Promise<any>;
+
+async function importChromium(): Promise<any> {
+  const file = path.join(__dirname, "..", "node_modules", "@sparticuz", "chromium", "build", "index.js");
+  try { return await esmImport(pathToFileURL(file).href); }
+  catch { return await esmImport("@sparticuz/chromium"); }
+}
+
 async function launchBrowser(): Promise<any> {
   if (process.env.VERCEL) {
-    const c: any = await import("@sparticuz/chromium");
+    const c: any = await importChromium();
     const chromium = c.default ?? c;
     const pc: any = await import("puppeteer-core");
     const puppeteerCore = pc.default ?? pc;
