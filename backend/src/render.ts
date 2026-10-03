@@ -48,17 +48,17 @@ line-height:1.2;padding:0 70px;text-shadow:0 4px 0 #0004}
 // Building the import() inside a Function keeps it a real dynamic import.
 const esmImport = new Function("m", "return import(m)") as (m: string) => Promise<any>;
 
-async function importChromium(): Promise<any> {
-  const file = path.join(__dirname, "..", "node_modules", "@sparticuz", "chromium", "build", "index.js");
-  try { return await esmImport(pathToFileURL(file).href); }
-  catch { return await esmImport("@sparticuz/chromium"); }
+async function importEsm(pkg: string, file: string): Promise<any> {
+  const full = path.join(__dirname, "..", "node_modules", pkg, file);
+  try { return await esmImport(pathToFileURL(full).href); }
+  catch { return await esmImport(pkg); }
 }
 
 async function launchBrowser(): Promise<any> {
   if (process.env.VERCEL) {
-    const c: any = await importChromium();
+    const c: any = await importEsm("@sparticuz/chromium", "build/index.js");
     const chromium = c.default ?? c;
-    const pc: any = await import("puppeteer-core");
+    const pc: any = await importEsm("puppeteer-core", "lib/puppeteer/puppeteer-core.js");
     const puppeteerCore = pc.default ?? pc;
     return puppeteerCore.launch({
       args: chromium.args,
