@@ -7,6 +7,17 @@ import { User, Template, Poster, GenerationLog } from "./models";
 import { suggestScheme } from "./gemini"; import { posterHtml, renderPng } from "./render";
 
 const app = express();
+// Vercel rewrite passes the real path as ?__path=... ; restore it so Express routes match
+app.use((req, _res, next) => {
+  const u = new URL(req.url, "http://localhost");
+  const p = u.searchParams.get("__path");
+  if (p !== null) {
+    u.searchParams.delete("__path");
+    req.url = "/" + p + u.search;
+  }
+  next();
+});
+
 const SECRET = process.env.JWT_SECRET || "dev";
 const PUBLIC = process.env.PUBLIC_URL || "http://localhost:4000";
 
