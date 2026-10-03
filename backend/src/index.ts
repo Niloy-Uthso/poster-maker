@@ -7,6 +7,8 @@ import { User, Template, Poster, GenerationLog } from "./models";
 import { suggestScheme } from "./gemini"; import { posterHtml, renderPng } from "./render";
 
 const app = express();
+app.set("trust proxy", 1); // behind Vercel's proxy
+
 // Vercel rewrite passes the real path as ?__path=... ; restore it so Express routes match
 app.use((req, _res, next) => {
   const u = new URL(req.url, "http://localhost");
@@ -25,9 +27,33 @@ const PUBLIC = process.env.PUBLIC_URL || "http://localhost:4000";
 const OUT = process.env.VERCEL ? path.join(os.tmpdir(), "storage") : path.join(__dirname, "..", "storage");
 fs.mkdirSync(path.join(OUT, "uploads"), { recursive: true });
 
-app.use(cors({ origin: process.env.FRONTEND_URL || "*" }));
+const origins = (process.env.FRONTEND_URL || "").split(",").map(s => s.trim()).filter(Boolean);
+app.use(cors({ origin: origins.length ? origins : "*" }));
 app.use(express.json());
 app.use("/files", express.static(OUT));
+
+// ---------- Database connection (retries on every request if it failed before) ----------
+let connecting: Promise<typeof mongoose> | null = null;
+function connectDb() {
+  if (mongoose.connection.readyState === 1) return Promise.resolve(mongoose);
+  if (!connecting) {
+    connecting = mongoose.connect(process.env.MONGO_URI!, { serverSelectionTimeoutMS: 8000, maxPoolSize: 5 })
+      .catch(e => { connecting = null; throw e; });
+  }
+  return connecting;
+}
+
+app.get("/", (_r, res) => { res.json({ ok: true, name: "AI Poster Maker API" }); });
+
+// open /api/health in the browser to see the real database error, if any
+app.get("/api/health", async (_r, res) => {
+  try { await connectDb(); res.json({ db: "connected" }); }
+  catch (e: any) { res.status(500).json({ db: "failed", error: e.message }); }
+});
+
+app.use(async (_req, _res, next) => {
+  try { await connectDb(); next(); } catch (e) { next(e); }
+});
 
 type Req = Request & { user?: { id: string; role: string } };
 const auth = (req: Req, res: Response, next: NextFunction) => {
@@ -192,11 +218,11 @@ app.get("/api/admin/stats", auth, admin, wrap(async (_r, res) => {
   res.json({ users, posters, completed, failed, blocked, avgLatencyMs: Math.round(lat[0]?.avg || 0) });
 }));
 
-app.get("/", (_r, res) => { res.json({ ok: true, name: "AI Poster Maker API" }); });
-
 app.use((e: Error, _q: Request, res: Response, _n: NextFunction) => { console.error(e); res.status(500).json({ error: e.message }); });
 
-mongoose.connect(process.env.MONGO_URI!).catch(e => console.error("Mongo connect failed", e));
-if (!process.env.VERCEL) app.listen(process.env.PORT || 4000, () => console.log("API on", PUBLIC));
+if (!process.env.VERCEL) {
+  connectDb().catch(e => console.error("Mongo connect failed:", e.message));
+  app.listen(process.env.PORT || 4000, () => console.log("API on", PUBLIC));
+}
 
 export default app;
