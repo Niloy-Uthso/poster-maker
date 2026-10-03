@@ -22,11 +22,15 @@ export default function AdminPage() {
 
   const isAdmin = user?.role === "admin";
 
-  // guard: must be logged in AND admin
   useEffect(() => {
-    if (loading) return;
-    if (!token) router.replace("/login");
-    else if (!isAdmin) router.replace("/");
+    if (loading) 
+      return;
+    if (!token)
+       router.replace("/login");
+
+    else if (!isAdmin)
+       router.replace("/");
+
   }, [loading, token, isAdmin, router]);
 
   const call = useCallback(async (path: string, opts: any = {}) => {
@@ -52,10 +56,18 @@ export default function AdminPage() {
   const saveTemplate = async () => {
     setErr("");
     const body = {
-      title: form.title, occasionType: form.occasionType, isActive: form.isActive,
+      title: form.title,
+       occasionType: form.occasionType,
+        isActive: form.isActive,
       layoutConfig: {
         photoSlots: Number(form.photoSlots),
-        palette: { bg1: form.bg1, bg2: form.bg2, accent: form.accent, text: form.text, decoration: form.decoration, photoFocus: "top" },
+        palette: { 
+          bg1: form.bg1,
+           bg2: form.bg2,
+            accent: form.accent,
+             text: form.text,
+              decoration: form.decoration,
+               photoFocus: "top" },
       },
     };
     try {

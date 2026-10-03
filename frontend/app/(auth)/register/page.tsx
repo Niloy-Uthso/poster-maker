@@ -16,12 +16,17 @@ export default function RegisterPage() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (!loading && token) router.replace("/"); }, [loading, token, router]);
+  useEffect(() => { 
+    if (!loading && token)
+       router.replace("/"); 
+      }, [loading, token, router]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
-    if (password.length < 6) return setErr("Password must be at least 6 characters");
+    if (password.length < 6)
+       return setErr("Password must be at least 6 characters");
+
     setBusy(true);
     try {
       const r = await fetch(`${API}/api/auth/register`, {
@@ -29,10 +34,15 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
       });
+
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Registration failed");
+
+      if (!r.ok) 
+        throw new Error(d.error || "Registration failed");
+      
       login(d.token, d.user);
       router.push("/");
+      
     } catch (e: any) {
       setErr(e.message);
     } finally {

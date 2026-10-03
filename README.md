@@ -1,6 +1,6 @@
 # AI Poster Maker (MVP)
 > Next.js + Express (TS) + MongoDB + Gemini.  
-> **Option B:** Gemini picks the palette and decoration, while Puppeteer renders the exact Bangla text into a **2400×3200 PNG**.
+> Gemini picks the palette and decoration, while Puppeteer renders the exact Bangla text into a **2400×3200 PNG**.
 ## Demo Admin Login
 - **Email:** `niloyuthso16@gmail.com`
 - **Password:** `asdfgH`
