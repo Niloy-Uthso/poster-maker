@@ -72,11 +72,14 @@ const [instructions, setInstructions] = useState("");
     } catch (e: any) { setErr(e.message); }
   };
 
-  const run = async (path: string, body: any) => {
-    setErr(""); setBusy(true);
-    try { setPoster(await call(path, { method: "POST", body: JSON.stringify(body) })); }
-    catch (e: any) { setErr(e.message); setBusy(false); }
-  };
+ const run = async (path: string, body: any) => {
+  setErr(""); setBusy(true);
+  try {
+    const p = await call(path, { method: "POST", body: JSON.stringify(body) });
+    setPoster(p);
+    if (p.status !== "generating") { setBusy(false); loadHist(); }
+  } catch (e: any) { setErr(e.message); setBusy(false); }
+};
 
   const create = () => run("/api/posters", {
     templateId: tpl,
@@ -90,7 +93,8 @@ const [instructions, setInstructions] = useState("");
     catch (e: any) { setErr(e.message); }
   };
 
-  if (loading || !token) return <p className="p-8 text-center text-gray-500">Loading…</p>;
+  if (loading || !token) 
+    return <p className="p-8 text-center text-gray-500">Loading…</p>;
 
   const field = (k: string, label: string) => (
     <label className="block text-sm font-medium text-gray-700">

@@ -43,7 +43,8 @@ export default function MyPostersPage() {
     } catch (e: any) { setErr(e.message); }
   };
 
-  if (loading || !token) return <p className="p-8 text-center text-gray-500">Loading…</p>;
+  if (loading || !token) 
+    return <p className="p-8 text-center text-gray-500">Loading…</p>;
 
   return (
     <div className="mx-auto max-w-6xl p-4">
@@ -63,33 +64,35 @@ export default function MyPostersPage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {posters.map(p => (
-          <div key={p._id} className="overflow-hidden rounded-xl bg-white shadow">
-            <div className="flex aspect-[3/4] items-center justify-center bg-gray-100">
-              {p.status === "completed" && p.generatedImageUrl ? (
-                <img src={p.generatedImageUrl} alt={p.formData?.headline} className="h-full w-full object-cover" />
-              ) : p.status === "failed" ? (
-                <span className="px-4 text-center text-red-600">Failed to generate</span>
-              ) : (
-                <span className="text-gray-500">Generating…</span>
-              )}
-            </div>
-            <div className="p-4">
-              <h3 className="truncate font-semibold">{p.formData?.headline || "Untitled"}</h3>
-              <p className="truncate text-sm text-gray-600">{p.formData?.name}</p>
-              <p className="mb-3 text-xs text-gray-400">{new Date(p.createdAt).toLocaleString()}</p>
-              <div className="flex items-center gap-2">
-                {p.generatedImageUrl && (
-                  <a href={p.generatedImageUrl} target="_blank"
-                    className="rounded-lg bg-brand px-3 py-1.5 text-sm text-white hover:bg-brand-dark">Open / Download</a>
-                )}
-                <button onClick={() => del(p._id)}
-                  className="cursor-pointer rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
-              </div>
-            </div>
-          </div>
-        ))}
+  {posters.map(p => (
+    <div key={p._id} className="overflow-hidden rounded-xl bg-white shadow">
+      <div className="flex aspect-[3/4] items-center justify-center bg-gray-100">
+        {p.blocked ? (
+          <span className="px-4 text-center text-red-600">Blocked by an admin</span>
+        ) : p.status === "completed" && p.generatedImageUrl ? (
+          <img src={p.generatedImageUrl} alt={p.formData?.headline} className="h-full w-full object-cover" />
+        ) : p.status === "failed" ? (
+          <span className="px-4 text-center text-red-600">Failed to generate</span>
+        ) : (
+          <span className="text-gray-500">Generating…</span>
+        )}
       </div>
+      <div className="p-4">
+        <h3 className="truncate font-semibold">{p.formData?.headline || "Untitled"}</h3>
+        <p className="truncate text-sm text-gray-600">{p.formData?.name}</p>
+        <p className="mb-3 text-xs text-gray-400">{new Date(p.createdAt).toLocaleString()}</p>
+        <div className="flex items-center gap-2">
+          {p.generatedImageUrl && (
+            <a href={p.generatedImageUrl} target="_blank"
+              className="rounded-lg bg-brand px-3 py-1.5 text-sm text-white hover:bg-brand-dark">Open / Download</a>
+          )}
+          <button onClick={() => del(p._id)}
+            className="cursor-pointer rounded-lg border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Delete</button>
+        </div>
+      </div>
+    </div>
+  ))}
+</div>
     </div>
   );
 }
